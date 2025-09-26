@@ -23,6 +23,7 @@ void project_to_circle(double *x, double *y, double *vx, double *vy, double R) {
 void EulerMethod(double *x, double *y, double *vx, double *vy,
                  double a_t, double R, double dt) {
     double r = sqrt((*x)*(*x) + (*y)*(*y));
+    if (r == 0.0) return; // Avoid division by zero
     double tx = -(*y) / r;
     double ty =  (*x) / r;
     double ax = a_t * tx;
@@ -39,22 +40,27 @@ void EulerMethod(double *x, double *y, double *vx, double *vy,
 void HeunMethod(double *x, double *y, double *vx, double *vy,
                 double a_t, double R, double dt) {
     double r = sqrt((*x)*(*x) + (*y)*(*y));
+    if (r == 0.0) return;
     double tx = -(*y) / r;
     double ty =  (*x) / r;
     double ax = a_t * tx;
     double ay = a_t * ty;
 
+    // Predictor step
     double x_pred = *x + (*vx) * dt;
     double y_pred = *y + (*vy) * dt;
     double vx_pred = *vx + ax * dt;
     double vy_pred = *vy + ay * dt;
 
+    // Calculate acceleration at predicted point
     double r_pred = sqrt(x_pred*x_pred + y_pred*y_pred);
+    if (r_pred == 0.0) return;
     double tx_pred = -y_pred / r_pred;
     double ty_pred =  x_pred / r_pred;
     double ax_pred = a_t * tx_pred;
     double ay_pred = a_t * ty_pred;
 
+    // Corrector step - average of slopes
     *x  += 0.5 * ((*vx) + vx_pred) * dt;
     *y  += 0.5 * ((*vy) + vy_pred) * dt;
     *vx += 0.5 * (ax + ax_pred) * dt;
@@ -66,22 +72,27 @@ void HeunMethod(double *x, double *y, double *vx, double *vy,
 void MidpointMethod(double *x, double *y, double *vx, double *vy,
                     double a_t, double R, double dt) {
     double r = sqrt((*x)*(*x) + (*y)*(*y));
+    if (r == 0.0) return;
     double tx = -(*y) / r;
     double ty =  (*x) / r;
     double ax = a_t * tx;
     double ay = a_t * ty;
 
+    // Calculate midpoint values
     double x_mid  = *x + 0.5*(*vx)*dt;
     double y_mid  = *y + 0.5*(*vy)*dt;
     double vx_mid = *vx + 0.5*ax*dt;
     double vy_mid = *vy + 0.5*ay*dt;
 
+    // Calculate acceleration at midpoint
     double r_mid = sqrt(x_mid*x_mid + y_mid*y_mid);
+    if (r_mid == 0.0) return;
     double tx_mid = -y_mid / r_mid;
     double ty_mid =  x_mid / r_mid;
     double ax_mid = a_t * tx_mid;
     double ay_mid = a_t * ty_mid;
 
+    // Update using midpoint values
     *x  += vx_mid * dt;
     *y  += vy_mid * dt;
     *vx += ax_mid * dt;
@@ -96,6 +107,7 @@ void RK4Method(double *x, double *y, double *vx, double *vy,
 
     // k1
     r = sqrt((*x)*(*x) + (*y)*(*y));
+    if (r == 0.0) return;
     tx = -(*y) / r;  ty = (*x) / r;
     ax = a_t * tx;   ay = a_t * ty;
 
@@ -110,6 +122,7 @@ void RK4Method(double *x, double *y, double *vx, double *vy,
     double vx2 = *vx + 0.5*k1vx;
     double vy2 = *vy + 0.5*k1vy;
     r = sqrt(x2*x2 + y2*y2);
+    if (r == 0.0) return;
     tx = -y2 / r; ty = x2 / r;
     ax = a_t * tx; ay = a_t * ty;
 
@@ -124,6 +137,7 @@ void RK4Method(double *x, double *y, double *vx, double *vy,
     double vx3 = *vx + 0.5*k2vx;
     double vy3 = *vy + 0.5*k2vy;
     r = sqrt(x3*x3 + y3*y3);
+    if (r == 0.0) return;
     tx = -y3 / r; ty = x3 / r;
     ax = a_t * tx; ay = a_t * ty;
 
@@ -138,6 +152,7 @@ void RK4Method(double *x, double *y, double *vx, double *vy,
     double vx4 = *vx + k3vx;
     double vy4 = *vy + k3vy;
     r = sqrt(x4*x4 + y4*y4);
+    if (r == 0.0) return;
     tx = -y4 / r; ty = x4 / r;
     ax = a_t * tx; ay = a_t * ty;
 
@@ -154,7 +169,49 @@ void RK4Method(double *x, double *y, double *vx, double *vy,
     project_to_circle(x, y, vx, vy, R);
 }
 
-// ===== Simulation wrapper =====
+// ===== Main Function (Assignment Required) =====
+double rollnum_odes(double start_theta, double start_speed,
+                   double linear_acceleration, double circle_radius,
+                   double time_step, double final_time, const char *solver_name) {
+    
+    // Validate solver name
+    if (strcmp(solver_name, "Euler") != 0 && 
+        strcmp(solver_name, "Heun") != 0 && 
+        strcmp(solver_name, "Midpoint") != 0 && 
+        strcmp(solver_name, "RK4") != 0) {
+        fprintf(stderr, "Error: Invalid solver name '%s'. Valid options: Euler, Heun, Midpoint, RK4\n", solver_name);
+        exit(1);
+    }
+
+    int steps = (int)round(final_time / time_step);
+    
+    // Initial conditions
+    double x = circle_radius * cos(start_theta);
+    double y = circle_radius * sin(start_theta);
+    double vx = -start_speed * sin(start_theta);  // Tangential velocity
+    double vy =  start_speed * cos(start_theta);
+
+    // Simulate using the specified solver
+    for (int i = 0; i < steps; i++) {
+        if (strcmp(solver_name, "Euler") == 0) {
+            EulerMethod(&x, &y, &vx, &vy, linear_acceleration, circle_radius, time_step);
+        } else if (strcmp(solver_name, "Heun") == 0) {
+            HeunMethod(&x, &y, &vx, &vy, linear_acceleration, circle_radius, time_step);
+        } else if (strcmp(solver_name, "Midpoint") == 0) {
+            MidpointMethod(&x, &y, &vx, &vy, linear_acceleration, circle_radius, time_step);
+        } else if (strcmp(solver_name, "RK4") == 0) {
+            RK4Method(&x, &y, &vx, &vy, linear_acceleration, circle_radius, time_step);
+        }
+    }
+
+    // Return final angular position
+    double final_theta = atan2(y, x);
+    if (final_theta < 0) final_theta += 2*M_PI;
+    
+    return final_theta;
+}
+
+// ===== Simulation wrapper for comparison =====
 void simulate(const char *solver_name,
               double start_theta, double start_speed,
               double a_t, double R,
@@ -186,7 +243,7 @@ void simulate(const char *solver_name,
     }
 }
 
-// ===== Main =====
+// ===== Main for testing and comparison =====
 int main(int argc, char *argv[]) {
     if (argc != 8) {
         fprintf(stderr, "Usage: %s start_theta start_speed linear_acceleration circle_radius time_step final_time solver_name\n", argv[0]);
@@ -205,6 +262,13 @@ int main(int argc, char *argv[]) {
 
     double *traj_solver = malloc(steps * sizeof(double));
     double *traj_rk4    = malloc(steps * sizeof(double));
+
+    if (!traj_solver || !traj_rk4) {
+        fprintf(stderr, "Memory allocation failed\n");
+        free(traj_solver);  // Free any successful allocations
+        free(traj_rk4);
+        return 1;
+    }
 
     simulate(solver_name, start_theta, start_speed, a_t, R, dt, final_time, traj_solver, steps);
     simulate("RK4",      start_theta, start_speed, a_t, R, dt, final_time, traj_rk4, steps);
