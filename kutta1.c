@@ -1,47 +1,55 @@
 #include <stdio.h>
 #include <math.h>
 
-typedef struct {
-    double x;
-    double y;
-} Vector2;
 
-// Function to compute vector magnitude
-double norm(Vector2 v) {
-    return sqrt(v.x * v.x + v.y * v.y);
+double EulerMethod(double start_theta, double start_speed,
+                   double linear_acceleration, double circle_radius,
+                   double time_step, double final_time) {
+
+    // Initialize state
+    double x = circle_radius * cos(start_theta);
+    double y = circle_radius * sin(start_theta);
+    double vx = -start_speed * sin(start_theta);
+    double vy =  start_speed * cos(start_theta);
+
+    int steps = (int)(final_time / time_step);
+    for (int i = 0; i < steps; i++) {
+        // compute tangential acceleration
+        double r = sqrt(x*x + y*y);
+        double tx = -y / r;
+        double ty =  x / r;
+        double ax = linear_acceleration * tx;
+        double ay = linear_acceleration * ty;
+
+        // x and v are updated using the euler method.
+        x  += vx * time_step;
+        y  += vy * time_step;
+        vx += ax * time_step;
+        vy += ay * time_step;
+
+        // projecting back to circle by adjusting the distance.
+        double rn = sqrt(x*x + y*y);
+        x = x * circle_radius / rn;
+        y = y * circle_radius / rn;
+    }
+
+    // to keep theta strictly above 0, we are using a if clause to add 2pi.
+    double theta = atan2(y, x);
+    if (theta < 0) theta += 2*M_PI;
+    return theta;
 }
 
-// Function to multiply vector by scalar
-Vector2 scalar_mul(Vector2 v, double s) {
-    Vector2 res = {v.x * s, v.y * s};
-    return res;
-}
 
-// Function to add two vectors
-Vector2 vec_add(Vector2 a, Vector2 b) {
-    Vector2 res = {a.x + b.x, a.y + b.y};
-    return res;
-}
+int main() {
+    double theta_final = EulerMethod(
+        0.0,    
+        0.5,  
+        0.2,   
+        1.0, 
+        0.01, 
+        5.0   
+    );
 
-// Function to normalize vector to length R
-Vector2 project_to_circle(Vector2 pos, double R) {
-    double n = norm(pos);
-    Vector2 res = {pos.x * R / n, pos.y * R / n};
-    return res;
-}
-
-// Euler step function
-void euler_step(Vector2 *pos, Vector2 *vel, Vector2 acc, double h, double R) {
-    // Step 1: move along velocity
-    Vector2 pos_new = vec_add(*pos, scalar_mul(*vel, h));
-    
-    // Step 2: update velocity
-    Vector2 vel_new = vec_add(*vel, scalar_mul(acc, h));
-    
-    // Step 3: project back to circle
-    pos_new = project_to_circle(pos_new, R);
-    
-    // Update original position and velocity
-    *pos = pos_new;
-    *vel = vel_new;
+    printf("Final angular position θ = %.6f rad\n", theta_final);
+    return 0;
 }
