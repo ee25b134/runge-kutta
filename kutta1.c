@@ -170,7 +170,7 @@ void RK4Method(double *x, double *y, double *vx, double *vy,
 }
 
 // ===== Main Function (Assignment Required) =====
-double rollnum_odes(double start_theta, double start_speed,
+double ee25b040_odes(double start_theta, double start_speed,
                    double linear_acceleration, double circle_radius,
                    double time_step, double final_time, const char *solver_name) {
     
@@ -289,3 +289,4 @@ int main(int argc, char *argv[]) {
     free(traj_rk4);
     return 0;
 }
+
