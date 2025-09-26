@@ -1,290 +1,227 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
+// Tangential projection helper
+void project_to_circle(double *x, double *y, double *vx, double *vy, double R) {
+    double r = sqrt((*x)*(*x) + (*y)*(*y));
+    if (r == 0.0) return;
+    *x = (*x) * R / r;
+    *y = (*y) * R / r;
 
-double EulerMethod(double start_theta, double start_speed,
-                   double linear_acceleration, double circle_radius,
-                   double time_step, double final_time) {
+    // Project velocity back onto tangent
+    double tx = -(*y) / R;
+    double ty =  (*x) / R;
+    double vt = (*vx)*tx + (*vy)*ty;
+    *vx = vt * tx;
+    *vy = vt * ty;
+}
 
-    // Initialize state
-    double x = circle_radius * cos(start_theta);
-    double y = circle_radius * sin(start_theta);
+// ===== Solver Implementations =====
+
+void EulerMethod(double *x, double *y, double *vx, double *vy,
+                 double a_t, double R, double dt) {
+    double r = sqrt((*x)*(*x) + (*y)*(*y));
+    double tx = -(*y) / r;
+    double ty =  (*x) / r;
+    double ax = a_t * tx;
+    double ay = a_t * ty;
+
+    *x  += (*vx) * dt;
+    *y  += (*vy) * dt;
+    *vx += ax * dt;
+    *vy += ay * dt;
+
+    project_to_circle(x, y, vx, vy, R);
+}
+
+void HeunMethod(double *x, double *y, double *vx, double *vy,
+                double a_t, double R, double dt) {
+    double r = sqrt((*x)*(*x) + (*y)*(*y));
+    double tx = -(*y) / r;
+    double ty =  (*x) / r;
+    double ax = a_t * tx;
+    double ay = a_t * ty;
+
+    double x_pred = *x + (*vx) * dt;
+    double y_pred = *y + (*vy) * dt;
+    double vx_pred = *vx + ax * dt;
+    double vy_pred = *vy + ay * dt;
+
+    double r_pred = sqrt(x_pred*x_pred + y_pred*y_pred);
+    double tx_pred = -y_pred / r_pred;
+    double ty_pred =  x_pred / r_pred;
+    double ax_pred = a_t * tx_pred;
+    double ay_pred = a_t * ty_pred;
+
+    *x  += 0.5 * ((*vx) + vx_pred) * dt;
+    *y  += 0.5 * ((*vy) + vy_pred) * dt;
+    *vx += 0.5 * (ax + ax_pred) * dt;
+    *vy += 0.5 * (ay + ay_pred) * dt;
+
+    project_to_circle(x, y, vx, vy, R);
+}
+
+void MidpointMethod(double *x, double *y, double *vx, double *vy,
+                    double a_t, double R, double dt) {
+    double r = sqrt((*x)*(*x) + (*y)*(*y));
+    double tx = -(*y) / r;
+    double ty =  (*x) / r;
+    double ax = a_t * tx;
+    double ay = a_t * ty;
+
+    double x_mid  = *x + 0.5*(*vx)*dt;
+    double y_mid  = *y + 0.5*(*vy)*dt;
+    double vx_mid = *vx + 0.5*ax*dt;
+    double vy_mid = *vy + 0.5*ay*dt;
+
+    double r_mid = sqrt(x_mid*x_mid + y_mid*y_mid);
+    double tx_mid = -y_mid / r_mid;
+    double ty_mid =  x_mid / r_mid;
+    double ax_mid = a_t * tx_mid;
+    double ay_mid = a_t * ty_mid;
+
+    *x  += vx_mid * dt;
+    *y  += vy_mid * dt;
+    *vx += ax_mid * dt;
+    *vy += ay_mid * dt;
+
+    project_to_circle(x, y, vx, vy, R);
+}
+
+void RK4Method(double *x, double *y, double *vx, double *vy,
+               double a_t, double R, double dt) {
+    double r, tx, ty, ax, ay;
+
+    // k1
+    r = sqrt((*x)*(*x) + (*y)*(*y));
+    tx = -(*y) / r;  ty = (*x) / r;
+    ax = a_t * tx;   ay = a_t * ty;
+
+    double k1x = (*vx) * dt;
+    double k1y = (*vy) * dt;
+    double k1vx = ax * dt;
+    double k1vy = ay * dt;
+
+    // k2
+    double x2 = *x + 0.5*k1x;
+    double y2 = *y + 0.5*k1y;
+    double vx2 = *vx + 0.5*k1vx;
+    double vy2 = *vy + 0.5*k1vy;
+    r = sqrt(x2*x2 + y2*y2);
+    tx = -y2 / r; ty = x2 / r;
+    ax = a_t * tx; ay = a_t * ty;
+
+    double k2x = vx2 * dt;
+    double k2y = vy2 * dt;
+    double k2vx = ax * dt;
+    double k2vy = ay * dt;
+
+    // k3
+    double x3 = *x + 0.5*k2x;
+    double y3 = *y + 0.5*k2y;
+    double vx3 = *vx + 0.5*k2vx;
+    double vy3 = *vy + 0.5*k2vy;
+    r = sqrt(x3*x3 + y3*y3);
+    tx = -y3 / r; ty = x3 / r;
+    ax = a_t * tx; ay = a_t * ty;
+
+    double k3x = vx3 * dt;
+    double k3y = vy3 * dt;
+    double k3vx = ax * dt;
+    double k3vy = ay * dt;
+
+    // k4
+    double x4 = *x + k3x;
+    double y4 = *y + k3y;
+    double vx4 = *vx + k3vx;
+    double vy4 = *vy + k3vy;
+    r = sqrt(x4*x4 + y4*y4);
+    tx = -y4 / r; ty = x4 / r;
+    ax = a_t * tx; ay = a_t * ty;
+
+    double k4x = vx4 * dt;
+    double k4y = vy4 * dt;
+    double k4vx = ax * dt;
+    double k4vy = ay * dt;
+
+    *x  += (k1x + 2*k2x + 2*k3x + k4x)/6.0;
+    *y  += (k1y + 2*k2y + 2*k3y + k4y)/6.0;
+    *vx += (k1vx + 2*k2vx + 2*k3vx + k4vx)/6.0;
+    *vy += (k1vy + 2*k2vy + 2*k3vy + k4vy)/6.0;
+
+    project_to_circle(x, y, vx, vy, R);
+}
+
+// ===== Simulation wrapper =====
+void simulate(const char *solver_name,
+              double start_theta, double start_speed,
+              double a_t, double R,
+              double dt, double final_time,
+              double *theta_traj, int steps) {
+    // Initial conditions
+    double x = R * cos(start_theta);
+    double y = R * sin(start_theta);
     double vx = -start_speed * sin(start_theta);
     double vy =  start_speed * cos(start_theta);
 
-    int steps = (int)(final_time / time_step);
-    for (int i = 0; i < steps; i++) {
-        // compute tangential acceleration
-        double r = sqrt(x*x + y*y);
-        double tx = -y / r;
-        double ty =  x / r;
-        double ax = linear_acceleration * tx;
-        double ay = linear_acceleration * ty;
+    for (int i=0; i<steps; i++) {
+        if (strcmp(solver_name, "Euler") == 0) {
+            EulerMethod(&x, &y, &vx, &vy, a_t, R, dt);
+        } else if (strcmp(solver_name, "Heun") == 0) {
+            HeunMethod(&x, &y, &vx, &vy, a_t, R, dt);
+        } else if (strcmp(solver_name, "Midpoint") == 0) {
+            MidpointMethod(&x, &y, &vx, &vy, a_t, R, dt);
+        } else if (strcmp(solver_name, "RK4") == 0) {
+            RK4Method(&x, &y, &vx, &vy, a_t, R, dt);
+        } else {
+            fprintf(stderr, "Error: Invalid solver name '%s'.\n", solver_name);
+            exit(1);
+        }
 
-        // x and v are updated using the euler method.
-        x  += vx * time_step;
-        y  += vy * time_step;
-        vx += ax * time_step;
-        vy += ay * time_step;
-
-        // projecting back to circle by adjusting the distance.
-        double rn = sqrt(x*x + y*y);
-        x = x * circle_radius / rn;
-        y = y * circle_radius / rn;
+        double theta = atan2(y,x);
+        if (theta < 0) theta += 2*M_PI;
+        theta_traj[i] = theta;
     }
-
-    // to keep theta strictly above 0, we are using a if clause to add 2pi.
-    double theta = atan2(y, x);
-    if (theta < 0) theta += 2*M_PI;
-    return theta;
 }
 
-
-/* ---------- Heun method for circular motion ---------- */
-double HeunMethod(double start_theta, double start_speed,
-                  double linear_acceleration, double circle_radius,
-                  double time_step, double final_time) {
-
-    // Initialize state
-    double x = circle_radius * cos(start_theta);
-    double y = circle_radius * sin(start_theta);
-    double vx = -start_speed * sin(start_theta);
-    double vy =  start_speed * cos(start_theta);
-
-    int steps = (int)(final_time / time_step);
-
-    for (int i = 0; i < steps; i++) {
-        // --- Predictor (Euler step) ---
-        double r = sqrt(x*x + y*y);
-        double tx = -y / r;
-        double ty =  x / r;
-        double ax = linear_acceleration * tx;
-        double ay = linear_acceleration * ty;
-
-        // provisional step
-        double x_pred  = x  + vx * time_step;
-        double y_pred  = y  + vy * time_step;
-        double vx_pred = vx + ax * time_step;
-        double vy_pred = vy + ay * time_step;
-
-        // --- Corrector (compute slope at provisional step) ---
-        double r_pred = sqrt(x_pred*x_pred + y_pred*y_pred);
-        double tx_pred = -y_pred / r_pred;
-        double ty_pred =  x_pred / r_pred;
-        double ax_pred = linear_acceleration * tx_pred;
-        double ay_pred = linear_acceleration * ty_pred;
-
-        // --- Update using average slope ---
-        x  += 0.5 * (vx + vx_pred) * time_step;
-        y  += 0.5 * (vy + vy_pred) * time_step;
-        vx += 0.5 * (ax + ax_pred) * time_step;
-        vy += 0.5 * (ay + ay_pred) * time_step;
-
-        // Project back to circle
-        double rn = sqrt(x*x + y*y);
-        x = x * circle_radius / rn;
-        y = y * circle_radius / rn;
+// ===== Main =====
+int main(int argc, char *argv[]) {
+    if (argc != 8) {
+        fprintf(stderr, "Usage: %s start_theta start_speed linear_acceleration circle_radius time_step final_time solver_name\n", argv[0]);
+        return 1;
     }
 
-    // final angle
-    double theta = atan2(y, x);
-    if (theta < 0) theta += 2*M_PI;
-    return theta;
-}
-double MidpointMethod(double start_theta, double start_speed,
-                      double linear_acceleration, double circle_radius,
-                      double time_step, double final_time) {
+    double start_theta = atof(argv[1]);
+    double start_speed = atof(argv[2]);
+    double a_t         = atof(argv[3]);
+    double R           = atof(argv[4]);
+    double dt          = atof(argv[5]);
+    double final_time  = atof(argv[6]);
+    char *solver_name  = argv[7];
 
-    // Initialize state
-    double x = circle_radius * cos(start_theta);
-    double y = circle_radius * sin(start_theta);
-    double vx = -start_speed * sin(start_theta);
-    double vy =  start_speed * cos(start_theta);
+    int steps = (int)round(final_time / dt);
 
-    int steps = (int)(final_time / time_step);
+    double *traj_solver = malloc(steps * sizeof(double));
+    double *traj_rk4    = malloc(steps * sizeof(double));
 
-    for (int i = 0; i < steps; i++) {
-        // --- Step 1: slope at current state ---
-        double r = sqrt(x*x + y*y);
-        double tx = -y / r;
-        double ty =  x / r;
-        double ax = linear_acceleration * tx;
-        double ay = linear_acceleration * ty;
+    simulate(solver_name, start_theta, start_speed, a_t, R, dt, final_time, traj_solver, steps);
+    simulate("RK4",      start_theta, start_speed, a_t, R, dt, final_time, traj_rk4, steps);
 
-        // --- Step 2: midpoint prediction (half Euler step) ---
-        double x_mid  = x  + 0.5 * vx * time_step;
-        double y_mid  = y  + 0.5 * vy * time_step;
-        double vx_mid = vx + 0.5 * ax * time_step;
-        double vy_mid = vy + 0.5 * ay * time_step;
-
-        // recompute acceleration at midpoint
-        double r_mid = sqrt(x_mid*x_mid + y_mid*y_mid);
-        double tx_mid = -y_mid / r_mid;
-        double ty_mid =  x_mid / r_mid;
-        double ax_mid = linear_acceleration * tx_mid;
-        double ay_mid = linear_acceleration * ty_mid;
-
-        // --- Step 3: update using midpoint slope ---
-        x  += vx_mid * time_step;
-        y  += vy_mid * time_step;
-        vx += ax_mid * time_step;
-        vy += ay_mid * time_step;
-
-        // Project back to circle
-        double rn = sqrt(x*x + y*y);
-        x = x * circle_radius / rn;
-        y = y * circle_radius / rn;
+    // Compute RMS error
+    double sumsq = 0.0;
+    for (int i=0; i<steps; i++) {
+        double diff = traj_solver[i] - traj_rk4[i];
+        sumsq += diff*diff;
     }
+    double rms = sqrt(sumsq/steps);
 
-    // final angle
-    double theta = atan2(y, x);
-    if (theta < 0) theta += 2*M_PI;
-    return theta;
-}
+    printf("Final angle (%s) = %.12f radians\n", solver_name, traj_solver[steps-1]);
+    printf("Final angle (RK4) = %.12f radians\n", traj_rk4[steps-1]);
+    printf("RMS error vs RK4 = %.12e\n", rms);
 
-#include <stdio.h>
-#include <math.h>
-
-// RK4 Method to solve the ODE
-double RK4Method(double start_theta, double start_speed, double linear_acceleration, 
-                 double circle_radius, double time_step, double final_time) {
-    // Initialize state
-    double x = circle_radius * cos(start_theta);
-    double y = circle_radius * sin(start_theta);
-    double vx = -start_speed * sin(start_theta);
-    double vy = start_speed * cos(start_theta);
-
-    int steps = (int)(final_time / time_step);
-
-    // RK4 integration loop
-    for (int i = 0; i < steps; i++) {
-        // Step 1: Calculate acceleration at current position
-        double r = sqrt(x * x + y * y); // radius
-        double tx = -y / r;  // Tangential unit vector in x direction
-        double ty = x / r;   // Tangential unit vector in y direction
-        double ax = linear_acceleration * tx;  // Tangential acceleration in x direction
-        double ay = linear_acceleration * ty;  // Tangential acceleration in y direction
-
-        // Calculate k1 (current slope)
-        double k1x = vx * time_step;
-        double k1y = vy * time_step;
-        double k1vx = ax * time_step;
-        double k1vy = ay * time_step;
-
-        // Step 2: Calculate k2 (midpoint slope, using k1)
-        double x_temp = x + 0.5 * k1x;
-        double y_temp = y + 0.5 * k1y;
-        double vx_temp = vx + 0.5 * k1vx;
-        double vy_temp = vy + 0.5 * k1vy;
-
-        r = sqrt(x_temp * x_temp + y_temp * y_temp);
-        tx = -y_temp / r;
-        ty = x_temp / r;
-        ax = linear_acceleration * tx;
-        ay = linear_acceleration * ty;
-
-        double k2x = vx_temp * time_step;
-        double k2y = vy_temp * time_step;
-        double k2vx = ax * time_step;
-        double k2vy = ay * time_step;
-
-        // Step 3: Calculate k3 (midpoint slope, using k2)
-        x_temp = x + 0.5 * k2x;
-        y_temp = y + 0.5 * k2y;
-        vx_temp = vx + 0.5 * k2vx;
-        vy_temp = vy + 0.5 * k2vy;
-
-        r = sqrt(x_temp * x_temp + y_temp * y_temp);
-        tx = -y_temp / r;
-        ty = x_temp / r;
-        ax = linear_acceleration * tx;
-        ay = linear_acceleration * ty;
-
-        double k3x = vx_temp * time_step;
-        double k3y = vy_temp * time_step;
-        double k3vx = ax * time_step;
-        double k3vy = ay * time_step;
-
-        // Step 4: Calculate k4 (next slope, using k3)
-        x_temp = x + k3x;
-        y_temp = y + k3y;
-        vx_temp = vx + k3vx;
-        vy_temp = vy + k3vy;
-
-        r = sqrt(x_temp * x_temp + y_temp * y_temp);
-        tx = -y_temp / r;
-        ty = x_temp / r;
-        ax = linear_acceleration * tx;
-        ay = linear_acceleration * ty;
-
-        double k4x = vx_temp * time_step;
-        double k4y = vy_temp * time_step;
-        double k4vx = ax * time_step;
-        double k4vy = ay * time_step;
-
-        // Step 5: Update the position and velocity using the average of the slopes
-        x += (k1x + 2 * k2x + 2 * k3x + k4x) / 6;
-        y += (k1y + 2 * k2y + 2 * k3y + k4y) / 6;
-        vx += (k1vx + 2 * k2vx + 2 * k3vx + k4vx) / 6;
-        vy += (k1vy + 2 * k2vy + 2 * k3vy + k4vy) / 6;
-
-        // Project back to the circle to maintain constant radius
-        double rn = sqrt(x * x + y * y);
-        x = x * circle_radius / rn;
-        y = y * circle_radius / rn;
-    }
-
-    // Final angular position θ = atan2(y, x)
-    double theta = atan2(y, x);
-    if (theta < 0) theta += 2 * M_PI;
-    return theta;
-}
-
-
-
-/* ---------- main driver for testing ---------- */
-int main() {
-    double theta_heun = HeunMethod(
-        0.0,    // start_theta
-        0.5,    // start_speed
-        0.2,    // linear_acceleration
-        1.0,    // circle_radius
-        0.01,   // time_step
-        5.0     // final_time
-    );
-        double theta_euler = EulerMethod(
-        0.0,    
-        0.5,  
-        0.2,   
-        1.0, 
-        0.01, 
-        5.0   
-    );
-  double theta_midpoint = MidpointMethod(
-        0.0,    
-        0.5,  
-        0.2,   
-        1.0, 
-        0.01, 
-        5.0   
-    );
- 
-    double theta_RK4Method = RK4Method(
-        0.0,    
-        0.5,  
-        0.2,   
-        1.0, 
-        0.01, 
-        5.0   
-    );
-
-
-    printf("Final angular position θ (Heun) = %.6f rad\n", theta_heun);
-
-    printf("Final angular position θ (euler) = %.6f rad\n", theta_euler);
-    
-    printf("Final angular position θ (midpoint) = %.6f rad\n", theta_midpoint);
-    
-    printf("Final angular position θ (RK4method) = %.6f rad\n", theta_RK4Method);
+    free(traj_solver);
+    free(traj_rk4);
     return 0;
 }
